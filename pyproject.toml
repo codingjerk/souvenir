@@ -4,6 +4,15 @@ version = "0.1.0"
 description = "Little CLI program which helps creating and viewing flashcards"
 authors = ["Denis Gruzdev <codingjerk@gmail.com>"]
 license = "MIT"
+readme = "README.md"
+homepage = "https://github.com/codingjerk/souvenir"
+repository = "https://github.com/codingjerk/souvenir"
+keywords = ["flashcard", "cli", "tool"]
+classifiers = [
+    "Environment :: Console",
+    "Operating System :: OS Independent",
+    "Topic :: Utilities",
+]
 
 [tool.poetry.scripts]
 sv = 'souvenir.__main__:sv'
