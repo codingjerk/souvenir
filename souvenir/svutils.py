@@ -61,10 +61,7 @@ def sv_list() -> None:
 
 def sv_repeat(times: int) -> None:
     deck = sv_deck()
-    if len(deck) < times:
-        deck = deck * times
-
-    sample = random.sample(deck, times)
+    sample = select_hardest_cards(deck, times)
 
     hits = []
     misses = []
@@ -94,6 +91,20 @@ def sv_repeat(times: int) -> None:
     print(f"  * Misses: {len(misses)} ({', '.join(set(misses))})")
 
     sv_save(deck)
+
+
+def select_hardest_cards(deck: Deck, count: int) -> Deck:
+    sample = []
+    while len(sample) < count:
+        for card in deck:
+            select_prob = 1 * (card.misses or 1) / (len(deck) or 1) / (card.views or 1)
+            if random.random() < select_prob:
+                sample.append(card)
+
+            if len(sample) >= count:
+                break
+
+    return sample
 
 
 def sv_save(deck: Deck) -> None:
