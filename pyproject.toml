@@ -11,6 +11,8 @@ sv = 'souvenir.__main__:sv'
 [tool.poetry.dependencies]
 python = "^3.9"
 typer = "^0.4.0"
+GitPython = "^3.1.24"
+tabulate = "^0.8.9"
 
 [tool.poetry.dev-dependencies]
 

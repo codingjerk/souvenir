@@ -2,8 +2,9 @@ from pathlib import Path
 
 import typer
 
-from souvenir.utils import create_directory, create_file
-from souvenir.git import git_add, git_commit, git_init
+from souvenir.fsutils import create_directory, create_file
+from souvenir.gitutils import git_add, git_commit, git_init
+from souvenir.svutils import sv_add, sv_list, sv_repeat
 
 sv = typer.Typer()
 
@@ -14,24 +15,25 @@ def new(deck_name: str) -> None:
 
     create_directory(deck_directory)
     create_file(deck_directory.joinpath("deck.csv"))
+
     git_init(deck_directory)
     git_add("deck.csv")
-    git_commit(deck_directory, "Initial commit")
+    git_commit("Initial commit")
 
 
 @sv.command()
 def add(question: str, answer: str) -> None:
-    pass
+    sv_add(question, answer)
 
 
 @sv.command()
 def list() -> None:
-    pass
+    sv_list()
 
 
 @sv.command()
-def repeat() -> None:
-    pass
+def repeat(times: int = 10) -> None:
+    sv_repeat(times)
 
 
 if __name__ == "__main__":
