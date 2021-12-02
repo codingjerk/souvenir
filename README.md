@@ -5,23 +5,36 @@
 ## Usage
 
 ```sh
-$ sv new french
+$ cat words.yml
+
+- fr: souvenir
+  en: to remember
+  ru: помнить
+
+- fr: parler
+  en: to speak
+  ru: говорить
 ```
 
 ```sh
-$ sv add souvenir memory
+$ sv list words
++----------+-------------+----------+
+| fr       | en          | ru       |
+|----------+-------------+----------|
+| souvenir | to remember | помнить  |
+| parler   | to speak    | говорить |
++----------+-------------+----------+
 ```
 
 ```sh
-$ sv list
-+------------+----------+---------+--------+----------+
-| Question   | Answer   |   Views |   Hits |   Misses |
-|------------+----------+---------+--------+----------|
-| souvenir   | memory   |       0 |      0 |        0 |
-+------------+----------+---------+--------+----------+
-```
+$ sv repeat words fr
+=> souvenir
+   en: to remember
+   ru: помнить
+=| correct? [y/n]
 
-```sh
-$ sv repeat --times 50
-... [ Interactive repeat session ] ...
+=> parler
+   en: to speak
+   ru: говорить
+=| correct? [y/n]
 ```

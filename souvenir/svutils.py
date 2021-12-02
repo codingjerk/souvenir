@@ -2,136 +2,181 @@ import random
 import sys
 import termios
 import tty
-from dataclasses import dataclass
-from typing import List
+from pathlib import Path
+from typing import Dict
 
+import yaml
 from tabulate import tabulate
 
-from souvenir.gitutils import git_add, git_commit
+
+class Deck:
+    def __init__(self, cards) -> None:
+        self.cards = cards
+
+    @staticmethod
+    def load(path: Path) -> "Deck":
+        with open(path, "r") as file:
+            cards = yaml.safe_load(file.read())
+
+        return Deck(cards)
 
 
-class Card:
-    def __init__(
-        self,
-        question: str,
-        answer: str,
-        views: int = 0,
-        hits: int = 0,
-        misses: int = 0,
-    ):
-        self.question = str(question)
-        self.answer = str(answer)
-        self.views = int(views)
-        self.hits = int(hits)
-        self.misses = int(misses)
+class BucketStats:
+    def __init__(self, path: Path, buckets: Dict[int, int], key: str) -> None:
+        self.path = path
+        self.buckets = buckets
+        self.key = key
 
-    def to_csv(self) -> str:
-        return "\t".join(self.to_row()) + "\n"
+    @staticmethod
+    def load(path: Path, key: str) -> "BucketStats":
+        try:
+            with open(path, "r") as file:
+                buckets = yaml.safe_load(file.read())
+        except FileNotFoundError:
+            buckets = {}
 
-    def to_row(self) -> List[str]:
-        return [
-            self.question,
-            self.answer,
-            str(self.views),
-            str(self.hits),
-            str(self.misses),
-        ]
+        return BucketStats(path, buckets, key)
+
+    def card_id(self, card) -> int:
+        if self.key not in card:
+            return hash(str(card))
+
+        return hash(self.key) + hash(card[self.key])
+
+    def bucket_of(self, card) -> int:
+        card_id = self.card_id(card)
+        bucket = self.buckets.get(card_id, 1)
+        assert 1 <= bucket
+
+        return bucket
+
+    def select_cards(self, cards, count: int) -> "LearningSample":
+        sample = []
+        while len(sample) < count:
+            for card in cards:
+                select_prob = 1 / self.bucket_of(card) / len(cards)
+
+                if random.random() < select_prob:
+                    sample.append(card)
+
+                if len(sample) >= count:
+                    break
+
+        return LearningSample(sample, self.key)
+
+    def update(self, learning_sample: "LearningSample") -> None:
+        for card in learning_sample.hits:
+            self.move_card(card, +1)
+
+        for card in learning_sample.misses:
+            self.move_card(card, -1)
+
+    def move_card(self, card, delta: int) -> None:
+        card_id = self.card_id(card)
+        bucket = self.bucket_of(card)
+
+        self.buckets[card_id] = max(bucket + delta, 1)
+
+    def save(self) -> None:
+        with open(self.path, "w") as file:
+            yaml.safe_dump(self.buckets, file)
 
 
-Deck = List[Card]
+class LearningSample:
+    def __init__(self, cards, key: str) -> None:
+        self.cards = cards
+        self.key = key
+
+        self.hits = []
+        self.misses = []
+
+    def run_interactive(self):
+        for card in self.cards:
+            if not self.key in card:
+                continue
+
+            self.show_question(card)
+            correct = self.ask_if_correct(card)
+
+            if correct:
+                self.hits.append(card)
+            else:
+                self.misses.append(card)
+
+        self.show_results()
+
+    def show_results(self) -> None:
+        print("=> session results")
+
+        hits = self.cards_to_key_string(self.hits)
+        misses = self.cards_to_key_string(self.misses)
+        print(f"  * hits:   {len(self.hits)} ({hits})")
+        print(f"  * misses: {len(self.misses)} ({misses})")
+
+    def cards_to_key_string(self, cards) -> str:
+        return ", ".join(
+            card[self.key]
+            for card in cards
+            if self.key in card
+        )
+
+    def show_question(self, card) -> None:
+        question = card[self.key]
+
+        print(f"=> {question}", end=" ", flush=True)
+        self.getch()
+        print()
+
+    def ask_if_correct(self, card) -> bool:
+        correct = None
+        while correct not in {"n", "y"}:
+            self.show_answer(card)
+            print("=| correct? [y/n]", end=" ", flush=True)
+            correct = self.getch()
+            print()
+        print()
+
+        return correct == "y"
+
+    def show_answer(self, card) -> None:
+        for key, value in card.items():
+            if key == self.key:
+                continue
+
+            print(f"   {key}: {value}")
+
+    @staticmethod
+    def getch() -> str:
+        fd = sys.stdin.fileno()
+        old_settings = termios.tcgetattr(fd)
+        try:
+            tty.setraw(sys.stdin.fileno())
+            ch = sys.stdin.read(1)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
+
+        if ord(ch) == 3:
+            exit(1)
+
+        return ch
 
 
-def sv_add(question: str, answer: str) -> None:
-    with open("deck.csv", "a") as deck_fh:
-        card = Card(question, answer)
-        deck_fh.write(card.to_csv())
+def sv_list(deck_name: str) -> None:
+    deck = Deck.load(Path(deck_name + ".yml"))
 
-    git_add("deck.csv")
-    git_commit(f'auto: add question "{question}"')
-
-
-def sv_list() -> None:
-    deck = sv_deck()
     print(tabulate(
-        [card.to_row() for card in deck],
-        headers=["Question", "Answer", "Views", "Hits", "Misses"],
+        deck.cards,
+        headers="keys",
         tablefmt="psql",
     ))
 
 
-def sv_repeat(times: int) -> None:
-    deck = sv_deck()
-    sample = select_hardest_cards(deck, times)
+def sv_repeat(deck_name: str, key: str, card_count: int) -> None:
+    deck = Deck.load(Path(deck_name + ".yml"))
+    bucket_stats = BucketStats.load(Path(deck_name + ".bts.yml"), key)
 
-    hits = []
-    misses = []
-    for card in sample:
-        print(f" [ ? ] => {card.question}", end=" ", flush=True)
-        getch()
-        print()
+    learning_sample = bucket_stats.select_cards(deck.cards, card_count)
+    learning_sample.run_interactive()
 
-        answer = None
-        while answer not in {"n", "y"}:
-            print(f" [y/n] => {card.answer}", end=" ", flush=True)
-            answer = getch()
-            print()
-        print()
-
-        card.views += 1
-
-        if answer == "y":
-            card.hits += 1
-            hits.append(card.question)
-        else:
-            card.misses += 1
-            misses.append(card.question)
-
-    print("Session stats:")
-    print(f"  * Hits:   {len(hits)} ({', '.join(set(hits))})")
-    print(f"  * Misses: {len(misses)} ({', '.join(set(misses))})")
-
-    sv_save(deck)
-
-
-def select_hardest_cards(deck: Deck, count: int) -> Deck:
-    sample = []
-    while len(sample) < count:
-        for card in deck:
-            select_prob = 1 * (card.misses or 1) / (len(deck) or 1) / (card.views or 1)
-            if random.random() < select_prob:
-                sample.append(card)
-
-            if len(sample) >= count:
-                break
-
-    return sample
-
-
-def sv_save(deck: Deck) -> None:
-    with open("deck.csv", "w") as deck_fh:
-        for card in deck:
-            deck_fh.write(card.to_csv())
-
-
-def sv_deck() -> Deck:
-    deck = []
-
-    with open("deck.csv", "r") as deck_fh:
-        for line in deck_fh.readlines():
-            args = line.strip().split("\t")
-            card = Card(*args)
-            deck.append(card)
-
-    return deck
-
-
-def getch() -> str:
-    fd = sys.stdin.fileno()
-    old_settings = termios.tcgetattr(fd)
-    try:
-        tty.setraw(sys.stdin.fileno())
-        ch = sys.stdin.read(1)
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)
-
-    return ch
+    bucket_stats.update(learning_sample)
+    bucket_stats.save()
