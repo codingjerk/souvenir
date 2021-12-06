@@ -22,7 +22,7 @@ class Deck:
 
 
 class BucketStats:
-    def __init__(self, path: Path, buckets: Dict[int, int], key: str) -> None:
+    def __init__(self, path: Path, buckets: Dict[str, int], key: str) -> None:
         self.path = path
         self.buckets = buckets
         self.key = key
@@ -37,11 +37,14 @@ class BucketStats:
 
         return BucketStats(path, buckets, key)
 
-    def card_id(self, card) -> int:
-        if self.key not in card:
-            return hash(str(card))
+    def card_id(self, card) -> str:
+        if self.key in card:
+            return f"{self.key}/{card[self.key]}"
 
-        return hash(self.key) + hash(card[self.key])
+        return ",".join(
+            f"{key}/{value}"
+            for key, value in sorted(card.items())
+        )
 
     def bucket_of(self, card) -> int:
         card_id = self.card_id(card)
