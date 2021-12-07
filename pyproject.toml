@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "souvenir"
-version = "1.0.0"
+version = "1.0.1"
 description = "Little CLI program which helps creating and viewing flashcards"
 authors = ["Denis Gruzdev <codingjerk@gmail.com>"]
 license = "MIT"
