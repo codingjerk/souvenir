@@ -6,8 +6,8 @@ sv = typer.Typer()
 
 
 @sv.command()
-def list(deck: str) -> None:
-    sv_list(deck)
+def list(deck: str, key: str) -> None:
+    sv_list(deck, key)
 
 
 @sv.command()

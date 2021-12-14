@@ -1,3 +1,4 @@
+import hashlib
 import random
 import sys
 import termios
@@ -38,13 +39,12 @@ class BucketStats:
         return BucketStats(path, buckets, key)
 
     def card_id(self, card) -> str:
-        if self.key in card:
-            return f"{self.key}/{card[self.key]}"
+        assert self.key in card
 
-        return ",".join(
-            f"{key}/{value}"
-            for key, value in sorted(card.items())
-        )
+        key = self.key
+        hash = hashlib.md5(card[self.key].encode()).hexdigest()
+
+        return f"{key}/{hash}"
 
     def bucket_of(self, card) -> int:
         card_id = self.card_id(card)
@@ -164,8 +164,12 @@ class LearningSample:
         return ch
 
 
-def sv_list(deck_name: str) -> None:
+def sv_list(deck_name: str, key: str) -> None:
     deck = Deck.load(Path(deck_name + ".yml"))
+    bucket_stats = BucketStats.load(Path(deck_name + ".bts.yml"), key)
+
+    for card in deck.cards:
+        card["bucket"] = bucket_stats.bucket_of(card)
 
     print(tabulate(
         deck.cards,
